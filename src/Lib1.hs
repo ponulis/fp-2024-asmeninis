@@ -6,27 +6,34 @@ module Lib1
 -- to be autocompleted in your program's repl.
 completions :: [String]
 completions = [
-    "coffeeMachine",
-    "order",
-    "coffeeType",
-    "espressoDrink",
-    "filterCoffee",
-    "shotCount",
-    "milk",
-    "frothedAndSteamedMilkRatio",
-    "cup",
-    "addons",
-    "syrup",
-    "aeropress",
-    "v60",
-    "chemex",
-    "frothed",
-    "steamed",
-    "disposable",
-    "reusable",
-    "sugar",
-    "saltedcaramel",
-    "strawberry",
-    "coconut",
-    "almond"
+      "make"
+    , "list"
+    , "orders"
+    , "cancel"
+    , "order"
+    , "espresso"
+    , "with"
+    , "shots"
+    , "milk"
+    , "whole"
+    , "skim"
+    , "almond"
+    , "oat"
+    , "soy"
+    , "filter"
+    , "coffee"
+    , "using"
+    , "aeropress"
+    , "v60"
+    , "chemex"
+    , "for"
+    , "takeout"
+    , "sitting in"
+    , "sugar"
+    , "salted"
+    , "caramel"
+    , "strawberry"
+    , "coconut"
+    , "hazelnut"
+    , "maple"
     ]
