@@ -86,16 +86,16 @@ data SyrupType
 type Parser a = String -> Either String (a, String)
 
 -- | Main parser for user input.
-parseQuery :: String -> Either String Query
+parseQuery :: String -> Either String (Query, String)
 parseQuery input =
     case parseMakeOrder input of
-        Right (orderList, _) -> Right (MakeOrder orderList)
+        Right (orderList, rest) -> Right (MakeOrder orderList, rest)
         Left err1 -> 
             case parseListOrders input of
-                Right (_, _) -> Right ListOrders
+                Right (_, rest) -> Right (ListOrders, rest)
                 Left err2 -> 
                     case parseCancelOrder input of
-                        Right (orderId, _) -> Right (CancelOrder orderId)
+                        Right (orderId, rest) -> Right (CancelOrder orderId, rest)
                         Left err3 -> Left ("parsing failed: " ++ err1 ++ " or " ++ err2 ++ " or " ++ err3)
 
 ------------------------
@@ -169,14 +169,32 @@ parseMakeEspresso input =
                                         Left _ -> 
                                             parseExtrasAndCup numberOfShots Espresso Nothing rest'''
                                 Left _ ->
-                                        parseExtrasAndCup numberOfShots Espresso Nothing rest''
+                                        case parseExactWord "with" rest'' of
+                                            Right (_, rest''') -> 
+                                                case parseMilkType rest''' of
+                                                    Right (milkType, rest'''') -> 
+                                                        case parseExactWord "and" rest'''' of
+                                                            Right (_, rest''''') -> parseExtrasAndCup numberOfShots Espresso (Just milkType) rest''''' 
+                                                            Left _ -> 
+                                                                case parseCupType rest'''' of
+                                                                    Right (cupType, rest''''') -> Right (Order Espresso (Just milkType) numberOfShots cupType [], rest''''')
+                                                                    Left _ -> Right (Order Espresso (Just milkType) numberOfShots SitIn [], rest''')
+                                                    Left _ -> 
+                                                        parseExtrasAndCup numberOfShots Espresso Nothing rest'''
+                                            Left _ -> 
+                                                case parseCupType rest'' of
+                                                    Right (cupType, rest'''') -> Right (Order Espresso Nothing numberOfShots cupType [], rest'''')
+                                                    Left _ -> Right (Order Espresso Nothing numberOfShots SitIn [], rest'')
                         Left _ -> Left "expected 'shots' after the number"
                 Left _ -> 
                     case parseMilkType rest of
                         Right (milkType, rest'') -> 
                             case parseExactWord "and" rest'' of
                                 Right (_, rest''') -> parseExtrasAndCup 1 Espresso (Just milkType) rest'''
-                                Left _ -> Left "expected extras after 'and'"
+                                Left _ ->
+                                    case parseCupType rest'' of
+                                    Right (cupType, rest''') -> Right (Order Espresso (Just milkType) 1 cupType [], rest''')
+                                    Left _ -> Right (Order Espresso (Just milkType) 1 SitIn [], rest'')
                         Left _ -> 
                             parseExtrasAndCup 1 Espresso Nothing rest
         Left _ -> 
@@ -195,12 +213,12 @@ parseMakeFilterCoffee input =
                     case parseExactWord "with" rest' of
                         Right (_, rest'') -> 
                             case parseMilkType rest'' of
-                                Right (_, rest''') -> 
+                                Right (milkType, rest''') -> 
                                     case parseExactWord "and" rest''' of
-                                        Right (_, rest'''') -> parseExtrasAndCup 0 (Filter filterType) Nothing rest''''
+                                        Right (_, rest'''') -> parseExtrasAndCup 0 (Filter filterType) (Just milkType) rest''''
                                         Left _ -> 
                                             case parseCupType rest''' of
-                                                Right (cupType, rest'''') -> Right (Order (Filter filterType) Nothing 0 cupType [], rest'''')
+                                                Right (cupType, rest'''') -> Right (Order (Filter filterType) (Just milkType) 0 cupType [], rest'''')
                                                 Left _ -> Right (Order (Filter filterType) Nothing 0 SitIn [], rest''')
                                 Left _ -> parseExtrasAndCup 0 (Filter filterType) Nothing rest''
                         Left _ ->
@@ -209,9 +227,21 @@ parseMakeFilterCoffee input =
                             Left _ -> Right (Order (Filter filterType) Nothing 0 SitIn [], rest')
                 Left _ -> Left "expected filter coffee type after 'using'"
         Left _ -> 
-            case parseCupType input of
-                Right (cupType, rest) -> Right (Order (Filter V60) Nothing 0 cupType [], rest)
-                Left _ -> Right (Order (Filter V60) Nothing 0 SitIn [], input)
+            case parseExactWord "with" input of
+                Right (_, rest'') -> 
+                    case parseMilkType rest'' of
+                        Right (_, rest''') -> 
+                            case parseExactWord "and" rest''' of
+                                Right (_, rest'''') -> parseExtrasAndCup 0 (Filter V60) Nothing rest''''
+                                Left _ -> 
+                                    case parseCupType rest''' of
+                                        Right (cupType, rest'''') -> Right (Order (Filter V60) Nothing 0 cupType [], rest'''')
+                                        Left _ -> Right (Order (Filter V60) Nothing 0 SitIn [], rest''')
+                        Left _ -> parseExtrasAndCup 0 (Filter V60) Nothing rest''
+                Left _ ->
+                    case parseCupType input of
+                    Right (cupType, rest'') -> Right (Order (Filter V60) Nothing 0 cupType [], rest'')
+                    Left _ -> Right (Order (Filter V60) Nothing 0 SitIn [], input)
 
 -- | Parses the extras and cup type for the order
 -- | <extras> ::= "with" <extra> ["and" <extra>]
@@ -374,28 +404,21 @@ parseCancelOrder input =
 ------------------------
 
 -- | An entity which represents your program's state.
--- Currently it has no constructors but you can introduce
--- as many as needed.
 data State = State
   { orders :: [(Int,Order)]
   , nextOrderId :: Int
   } deriving (Show, Eq)
 
 -- | Creates an initial program's state.
--- It is called once when the program starts.
 emptyState :: State
 emptyState = State [] 1 
 
 -- | Updates a state according to a query.
--- This allows your program to share the state
--- between repl iterations.
--- Right contains an optional message to print and
--- an updated program's state.
 stateTransition :: State -> Query -> Either String (Maybe String, State)
 stateTransition state (MakeOrder newOrders) = 
     let newOrderId = nextOrderId state  
-        updatedOrders = zip [newOrderId..] newOrders  -- Pair orders with new IDs
-        combinedOrders = updatedOrders ++ orders state  -- Combine new orders with existing ones
+        updatedOrders = zip [newOrderId..] newOrders
+        combinedOrders = updatedOrders ++ orders state
         updatedState = State combinedOrders (newOrderId + length newOrders)
     in Right (Just $ "Orders placed: " ++ show (map snd updatedOrders), updatedState)
 

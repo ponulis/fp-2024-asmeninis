@@ -1,4 +1,5 @@
 {-# LANGUAGE ImportQualifiedPost #-}
+{-# OPTIONS_GHC -Wno-deferred-out-of-scope-variables #-}
 module Main (main) where
 
 import Control.Concurrent.Chan
@@ -20,6 +21,7 @@ import System.Console.Repline
     evalRepl,
   )
 import Control.Concurrent (forkIO)
+import qualified Lib3
 
 type Repl a = HaskelineT (StateT (TVar Lib2.State, Chan Lib3.StorageOp) IO) a
 
@@ -53,8 +55,12 @@ invite MultiLine = pure "| "
 
 main :: IO ()
 main = do
+  -- Run manual tests
+  Lib3.testRenderParse
+  
+  -- Start the REPL
   chan <- newChan :: IO (Chan Lib3.StorageOp)
   state <- newTVarIO Lib2.emptyState
   _ <- forkIO $ Lib3.storageOpLoop chan
   evalStateT (evalRepl invite cmd [] (Just ':') (Just "paste") (Word completer) ini final)
-    (state, chan) 
+    (state, chan)
